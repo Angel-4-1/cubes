@@ -1,1 +1,224 @@
-Hello cubes
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pruebas</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!--Importar librerias-->
+    <script src="js/three.js"></script>
+    <script src="js/tweenmax-min.js"></script>  <!--para las animaciones-->
+    <script type="module" src='js/dat-gui.js'></script>
+    <script type="module" src="js/OrbitControls.js"></script>
+    <script src="js/objLoader.js"></script>
+    <script src="js/mtlLoader.js"></script>
+
+    <script type="module">
+        import * as dat from "./js/dat-gui.js";
+        import { OrbitControls } from "./js/OrbitControls.js";
+
+        /************INICIALIZACION***************/
+        //crear la escena
+        var scene = new THREE.Scene();
+
+        //crear una camera con perspectiva
+        var camera = new THREE.PerspectiveCamera( 
+            75, //FOV in degrees
+            window.innerWidth / window.innerHeight, //aspect ratio --> width / height
+            0.1, //near plane
+            1000 );  //far plane
+        camera.position.z = 10;
+        camera.position.y = 5;
+
+        //crear un renderer a tamaño de pantalla completa
+        var renderer = new THREE.WebGLRenderer(  );
+        renderer.setClearColor( "#DDDDDD" );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        document.body.appendChild( renderer.domElement );
+
+        //reajustar tamaño ventana
+        window.addEventListener('resize', () => {
+            //actualizar tamaño render + aspect de la camera
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            camera.aspect =  window.innerWidth / window.innerHeight;
+            //actualizar matriz de proyección
+            camera.updateProjectionMatrix();
+        })
+
+        //añadir una luz
+        var light = new THREE.PointLight( 0xFFFFFF, 1.4, 1000 );
+        light.position.set( 0, 15, 15 );
+        scene.add( light );
+        var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+        scene.add( light );
+
+        //controles de la camara
+        var controls = new OrbitControls( camera, renderer.domElement);
+
+        //añadir un grid
+        var gridXZ = new THREE.GridHelper( 100, 100 );  // (tamaño, divisiones)
+        scene.add( gridXZ );
+
+        //función para renderizar la escena
+        var render = function() {
+            requestAnimationFrame(render);  //renderiza cada vez que la pantalla cambia el tamaño
+
+            renderer.render( scene, camera );
+        }
+
+        /*************FIN INICIALIZACION***************/      
+        //generar cubos
+        //int number_cubes --> cuantos cubos se van a crear
+        //int range --> valor maximo que puede coger la x, z
+        //int max_scale_x --> definir maximo valor que puede coger la scale.x de la mesh
+        //int max_scale_z --> "          "            "             " scale.z de la mesh
+        //bool overlap --> permitir o no que los cubos se solapen entre si
+        function generateCubes(number_cubes, range, max_scale_x, max_scale_z, overlap = false) {  
+            //cubo
+            var geometry = new THREE.BoxGeometry(1, 1, 1); // (radius, width, height)
+
+            //lista de materiales de distinto color
+            var materials = [ 0xFF0000 /*red*/, 0x00FF00/*green*/, 0x0000FF/*blue*/, 0xFFFF00/*yellow*/, 0x00FFFF/*aqua*/, 0xFF00FF/*fuxia*/ ];
+
+            //todos los cubos
+            var cubes = [];
+    
+            for ( var i = 0; i < number_cubes; i++) {
+                //escalas del cubo respecto eje X y Z
+                var scaleX = Math.floor(  Math.random() * max_scale_x ) + 1;
+                var scaleZ = Math.floor(  Math.random() * max_scale_z ) + 1;
+                //posicion x,z del cubo
+                var x = Math.floor( ( Math.random() - 0.5) * range ) + scaleX / 2;
+                var z = Math.floor( ( Math.random() - 0.5) * range ) + scaleZ / 2;
+
+                //miramos si ya existe un cubo en esa posicion, de ser asi se descartara
+                var already_exists = false;
+                if ( overlap == false ) {
+                    for ( var j = 0; j < cubes.length; j++ ) {
+                        //cubo que queremos crear
+                        var minX = x - scaleX / 2;
+                        var maxX = x + scaleX / 2;
+                        var minZ = z - scaleZ / 2;
+                        var maxZ = z + scaleZ / 2;
+
+                        //cubo ya existente
+                        var cube = cubes[j];
+                        var minXCube = cube.position.x - cube.scale.x / 2;
+                        var maxXCube = cube.position.x + cube.scale.x / 2;
+                        var minZCube = cube.position.z - cube.scale.z / 2;
+                        var maxZCube = cube.position.z + cube.scale.z / 2;
+
+                        /*
+                        if ( x == cube.position.x && z == cube.position.z ) {
+                            already_exists = true;
+                            break;
+                        }
+                        */
+                        
+                        if ( !( ( minX < minXCube && minX < maxXCube && maxX < minXCube && maxX < maxXCube ) ||     //izq
+                                ( minX > maxXCube && minX > minXCube && maxX > minXCube && maxX > maxXCube ) ||     //derecha
+                                ( minZ < minZCube && minZ < maxZCube && maxZ < minZCube && maxZ < maxZCube ) ||     //abajo
+                                ( minZ > maxZCube && minZ > minZCube && maxZ > minZCube && maxZ > maxZCube ) ) ) {  //arriba
+                            already_exists = true;
+                            break;
+                        }
+                    }
+                }
+                
+                //si no existe lo creamos
+                if ( already_exists == false ) {
+                    //obtenemos un color aleatorio
+                    var random_number = Math.floor( Math.random() * materials.length ); 
+                    var mat = materials[random_number];
+                    mat = new THREE.MeshLambertMaterial( {color: mat} );
+                    
+                    //creamos la mesh
+                    var mesh = new THREE.Mesh( geometry, mat );
+                    
+                    //actualizamos su posicion y lo salvamos
+                    mesh.position.set( x, 0.5, z);
+                    mesh.scale.set( scaleX, 1, scaleZ );
+                    cubes.push( mesh );
+                    scene.add(mesh);
+                }
+            }
+
+            return cubes;
+        }
+
+        //eleminar un objeto de la escena
+        function removeObject(obj) {
+            var selectedObj = scene.getObjectById(obj.id);
+            scene.remove( selectedObj );
+        }
+
+        //eliminar todos los cubos
+        function removeAllCubes(cubes) {
+            cubes.forEach( box => { removeObject( box ); } );
+        }
+
+        //animación para hacer que los cubos crezcan
+        function grow(cubes) {
+            cubes.forEach( box => {
+                var time = Math.random() * 0.6 + 0.3;
+                var height = Math.floor( Math.random() * 10 );
+
+                //modificar escala en eje y
+                TweenMax.to( box.scale, time, {
+                    x: box.scale.x,
+                    y: 1 + height,
+                    z: box.scale.z,
+                    ease: Expo.easeOut
+                } );
+
+                //desplazar posicion y para simular que crece hacia arriba
+                TweenMax.to( box.position, time, {y: box.position.y + height / 2, ease: Expo.easeOut}, "-=2"); 
+                //(que queremos canviar, duracion, array de valores origen, offset (si no se pone nada ocurren despues de las anteriores))
+
+            } );
+        };
+        
+        //lista de cubos
+        var cubes = [];
+
+        //creación de la GUI
+        var gui = new dat.GUI();
+
+        var parameters = 
+        {
+            cubes_num: 75, // numeric
+            range: 100, // numeric slider
+            size_grid: 100,
+            c: "Hello, GUI!", // string
+            overlap: false, // boolean (checkbox)
+            e: "#ff8800", // color (hex)
+            f: function() { alert("Hello!") },
+            g: function() { alert( parameters.c ) },
+            v : 0,    // dummy value, only type is important
+            w: "...", // dummy value, only type is important
+            x: 0, y: 0, z: 0,
+            generate: function () { 
+                scene.remove( scene.getObjectById( gridXZ.id ) );   // eliminar grid ya existente
+                gridXZ = new THREE.GridHelper( this.size_grid, this.size_grid );  // (tamaño, divisiones)
+                scene.add( gridXZ );
+                removeAllCubes( cubes ); 
+                cubes = generateCubes( this.cubes_num, this.range, 3, 3, this.overlap ); 
+                grow( cubes );
+            }
+        };
+
+        parameters.generate();
+
+        // gui.add( parameters )
+        gui.add( parameters, 'cubes_num' ).min(1).max(100).step(1).name( 'Cubes' );
+        gui.add( parameters, 'range' ).min(10).max(200).step(10).name( 'Range' );
+        gui.add( parameters, 'size_grid' ).min(10).max(200).step(10).name( 'Grid size' );
+        gui.add( parameters, 'overlap' ).name( 'Overlap cubes' );
+        gui.add( parameters, 'generate' ).name( 'Generate' );
+
+        render();
+    </script>
+</body>
+</html>
